@@ -70,11 +70,8 @@ flutter run
 If you are setting up your own Firebase, the app expects the following collections:
 
 *   **`floors`**: Floor plan data (dimensions, path strings).
-*   **`beacons`**: Beacon metadata (MAC address, major, minor, associated exhibit ID).
-*   **`exhibits`**: Exhibit content (title, description, image URLs, related items).
-
-## Contributing 🤝
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+*   **`beacons`**: Beacon metadata (MAC address, uuid, objectName, description, imageUrl, videoUrl).
+*   **`places`**: Places content (title, description, imageUrl, videoUrl, related items).
 
 ## License 📄
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
