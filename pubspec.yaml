@@ -1,0 +1,73 @@
+name: tour_guide_app
+description: Autonomous Tour Guide
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # State management
+  flutter_riverpod: ^2.5.0
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Location (GPS for user position + distance calc)
+  geolocator: ^12.0.0
+  permission_handler: ^11.3.0
+
+  # HTTP (kept for Phase 8 Gemini LLM calls)
+  http: ^1.2.0
+
+  # URL launching (directions link, video links)
+  url_launcher: ^6.3.0
+
+  # Firebase — primary data source for both outdoor places and indoor beacons
+  firebase_core: ^3.3.0
+  cloud_firestore: ^5.2.0
+  firebase_auth: ^5.1.0
+  firebase_storage: ^12.1.0
+
+  # Local database — cache-first SQLite layer
+  sqflite: ^2.3.3
+  path: ^1.9.0
+
+  # Image loading
+  cached_network_image: ^3.4.0
+
+  # Markdown rendering (for LLM output in Phase 8)
+  flutter_markdown: ^0.7.3
+
+  # BLE scanning (Phase 5+)
+  flutter_blue_plus: ^1.31.0
+
+  # IMU sensors (Phase 6 — PDR / Madgwick)
+  sensors_plus: ^5.0.0
+
+  # Vector math for EKF (Phase 6)
+  vector_math: ^2.1.4
+
+  # Text to speech (Phase 9)
+  flutter_tts: ^4.0.2
+
+  # Language preference persistence (Phase 9)
+  shared_preferences: ^2.2.0
+  google_maps_flutter: ^2.17.0
+  flutter_dotenv: ^6.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
