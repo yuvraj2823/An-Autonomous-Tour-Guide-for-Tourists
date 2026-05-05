@@ -263,6 +263,15 @@ class _LlmSectionState extends ConsumerState<_LlmSection> {
                             }
                           },
                         ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'AI-generated content may not be 100% accurate.',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                         if (!_showDeepDive) ...[
                           const SizedBox(height: 16),
                           SizedBox(

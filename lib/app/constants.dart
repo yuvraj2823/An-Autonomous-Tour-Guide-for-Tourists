@@ -3,9 +3,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// All compile-time configuration values.
 /// Google Places API removed — Firebase is the sole outdoor data source.
 class AppConstants {
-  // ── Groq LLM (sole generation engine) ───────────────────────────────────
+  // ── Groq & Tavily ────────────────────────────────────────────────────────
   /// Get your key from: https://console.groq.com/keys
   static String get groqApiKey => dotenv.env['GROQ_API_KEY'] ?? '';
+  static String get tavilyApiKey => dotenv.env['TAVILY_API_KEY'] ?? '';
   static const String groqModelFast = 'llama-3.1-8b-instant';
   static const String groqModelFull = 'llama-3.3-70b-versatile';
 

@@ -340,7 +340,7 @@ class _BeaconContentPanelState extends ConsumerState<_BeaconContentPanel> {
                       color: AppTheme.primaryColor, size: 15),
                   const SizedBox(width: 6),
                   Text(
-                    'Gemini Guide',
+                    'AI Guide',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppTheme.primaryColor,
@@ -375,7 +375,7 @@ class _BeaconContentPanelState extends ConsumerState<_BeaconContentPanel> {
                 ),
                 data: (text) => text.isEmpty
                     ? const Text(
-                        'Configure your Gemini API key in lib/app/constants.dart '
+                        'Configure your API keys in lib/app/constants.dart '
                         'to see AI-generated narratives.',
                         style: TextStyle(
                             color: AppTheme.textSecondary, fontSize: 12))
@@ -395,6 +395,15 @@ class _BeaconContentPanelState extends ConsumerState<_BeaconContentPanel> {
                                 if (await canLaunchUrl(uri)) launchUrl(uri);
                               }
                             },
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'AI-generated content may not be 100% accurate.',
+                            style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                           if (!_showDeepDive) ...[
                             const SizedBox(height: 14),

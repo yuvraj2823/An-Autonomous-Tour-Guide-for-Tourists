@@ -32,9 +32,9 @@ class AiDebugState {
 }
 
 class AiService {
-  static const String _groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  static const String _wikipediaSearchUrl = 'https://en.wikipedia.org/w/api.php';
-  static const String _wikipediaSummaryUrl = 'https://en.wikipedia.org/api/rest_v1/page/summary';
+  static const String _groqUrl =
+      'https://api.groq.com/openai/v1/chat/completions';
+  static const String _tavilyApiUrl = 'https://api.tavily.com/search';
   static Future<void> _requestQueue = Future.value();
   static final Map<String, String> _cache = {};
   static final ValueNotifier<AiDebugState> debugState =
@@ -47,12 +47,15 @@ class AiService {
     ),
   );
 
-  static String _cacheKey(String key, String input) => '$key||$input'.hashCode.toString();
+  static String _cacheKey(String key, String input) =>
+      '$key||$input'.hashCode.toString();
 
   static bool looksLikeFailure(String text) {
     final t = text.trim();
     if (t.isEmpty) return true;
-    return t.startsWith('_Groq') || t.startsWith('_Gemini') || t.contains('API error');
+    return t.startsWith('_Groq') ||
+        t.startsWith('_Gemini') ||
+        t.contains('API error');
   }
 
   static void clearCache() => _cache.clear();
@@ -78,32 +81,37 @@ class AiService {
     return mapping[language] ?? language;
   }
 
-  static Future<String> _fetchWikipediaContext(String query) async {
+  static Future<String> _fetchTavilyContext(String query) async {
     try {
-      final searchUri = Uri.parse(
-        '$_wikipediaSearchUrl?action=query&list=search&format=json&srsearch=${Uri.encodeQueryComponent(query)}&srlimit=2&utf8=1',
-      );
-      final searchResp = await http.get(searchUri).timeout(const Duration(seconds: 8));
-      if (searchResp.statusCode != 200) return '';
-      final searchData = jsonDecode(searchResp.body) as Map<String, dynamic>;
-      final results = (searchData['query']?['search'] as List?) ?? const [];
+      final apiKey = AppConstants.tavilyApiKey;
+      if (apiKey.isEmpty) return '';
+
+      final resp = await http
+          .post(
+            Uri.parse(_tavilyApiUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'api_key': apiKey,
+              'query': query,
+              'search_depth': 'basic',
+              'include_answer': false,
+              'max_results': 4,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (resp.statusCode != 200) return '';
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final results = (data['results'] as List?) ?? const [];
       if (results.isEmpty) return '';
 
       final snippets = <String>[];
-      for (final r in results.take(2)) {
+      for (final r in results) {
         final title = (r['title'] ?? '').toString().trim();
-        if (title.isEmpty) continue;
-        final summaryUri = Uri.parse(
-          '$_wikipediaSummaryUrl/${Uri.encodeComponent(title)}',
-        );
-        final summaryResp =
-            await http.get(summaryUri).timeout(const Duration(seconds: 8));
-        if (summaryResp.statusCode != 200) continue;
-        final summaryData = jsonDecode(summaryResp.body) as Map<String, dynamic>;
-        final extract = (summaryData['extract'] ?? '').toString().trim();
-        final pageTitle = (summaryData['title'] ?? title).toString().trim();
-        if (extract.isNotEmpty) {
-          snippets.add('SOURCE: Wikipedia | TITLE: $pageTitle | EXTRACT: $extract');
+        final content = (r['content'] ?? '').toString().trim();
+        final url = (r['url'] ?? '').toString().trim();
+        if (content.isNotEmpty) {
+          snippets.add('SOURCE: $url | TITLE: $title | EXTRACT: $content');
         }
       }
       return snippets.join('\n\n');
@@ -126,7 +134,20 @@ class AiService {
       if (history.trim().isNotEmpty) 'HISTORY: $history',
       if (significance.trim().isNotEmpty) 'SIGNIFICANCE: $significance',
     ].join('\n');
-    final webContext = await _fetchWikipediaContext(name);
+
+    final key =
+        _cacheKey('place_${isDeepDive ? 'full' : 'base'}_$language', baseInfo);
+    final cached = _cache[key];
+    if (cached != null && !looksLikeFailure(cached)) {
+      // Keep state updated even on cache hit
+      debugState.value = debugState.value.copyWith(
+        language: language,
+        narrativeSource: 'cache',
+      );
+      return cached;
+    }
+
+    final webContext = await _fetchTavilyContext(name);
     final languageDirective = _langInstruction(language);
     final prompt = isDeepDive
         ? '''
@@ -140,7 +161,7 @@ Use these sources only:
 Rules:
 - Do NOT invent facts.
 - If details conflict or are missing, explicitly say you are not sure.
-- If there is very little reliable information, say: "There is not much reliable information available about this place."
+- If the WEB DATA is very short or missing and you do not know the answer, explicitly state: "Much information is not available about this place."
 - 100-180 words, max 2 short paragraphs.
 
 FIREBASE DATA:
@@ -155,8 +176,8 @@ Output language: $languageDirective.
 
 Use FIREBASE DATA first; use WEB DATA only if relevant.
 Do NOT hallucinate. If not sure, say so.
-If information is minimal, say: "There is not much reliable information available about this place."
-Write 20-70 words.
+If information is minimal, say: "Much information is not available about this place."
+Write 30-70 words.
 
 FIREBASE DATA:
 $baseInfo
@@ -164,12 +185,10 @@ $baseInfo
 WEB DATA:
 ${webContext.isEmpty ? 'No reliable web snippets found.' : webContext}
 ''';
-    final key = _cacheKey('place_${isDeepDive ? 'full' : 'base'}_$language', baseInfo);
-    final cached = _cache[key];
-    if (cached != null && !looksLikeFailure(cached)) return cached;
     final out = await _generateContent(
       prompt,
-      model: isDeepDive ? AppConstants.groqModelFull : AppConstants.groqModelFast,
+      model:
+          isDeepDive ? AppConstants.groqModelFull : AppConstants.groqModelFast,
       maxTokens: isDeepDive ? 500 : 200,
     );
     if (looksLikeFailure(out)) {
@@ -195,7 +214,19 @@ ${webContext.isEmpty ? 'No reliable web snippets found.' : webContext}
       if (description.trim().isNotEmpty) 'DESCRIPTION: $description',
       if (history.trim().isNotEmpty) 'HISTORY: $history',
     ].join('\n');
-    final webContext = await _fetchWikipediaContext(objectName);
+
+    final key =
+        _cacheKey('beacon_${isDeepDive ? 'full' : 'base'}_$language', baseInfo);
+    final cached = _cache[key];
+    if (cached != null && !looksLikeFailure(cached)) {
+      debugState.value = debugState.value.copyWith(
+        language: language,
+        narrativeSource: 'cache',
+      );
+      return cached;
+    }
+
+    final webContext = await _fetchTavilyContext(objectName);
     final languageDirective = _langInstruction(language);
     final prompt = isDeepDive
         ? '''
@@ -209,8 +240,10 @@ Use these sources only:
 Rules:
 - Never invent facts.
 - If unsure, clearly state uncertainty.
-- If information is scarce, say: "There is not much reliable information available about this exhibit."
-- 90-150 words, max 2 short paragraphs.
+- If the WEB DATA is very short or missing and you do not know the answer, explicitly state: "Much information is not available about this exhibit."
+- 100-180 words, max 2-3 short paragraphs.
+- If much information is not available then write only 10-15 words.
+
 
 FIREBASE DATA:
 $baseInfo
@@ -223,7 +256,8 @@ You are a factual museum guide.
 Output language: $languageDirective.
 Use FIREBASE DATA first and WEB DATA only if relevant.
 No hallucinations. If unsure, say so.
-Write 10-30 words.
+If information is minimal, say: "Much information is not available about this exhibit."
+Write 10-20 words.
 
 FIREBASE DATA:
 $baseInfo
@@ -231,12 +265,10 @@ $baseInfo
 WEB DATA:
 ${webContext.isEmpty ? 'No reliable web snippets found.' : webContext}
 ''';
-    final key = _cacheKey('beacon_${isDeepDive ? 'full' : 'base'}_$language', baseInfo);
-    final cached = _cache[key];
-    if (cached != null && !looksLikeFailure(cached)) return cached;
     final out = await _generateContent(
       prompt,
-      model: isDeepDive ? AppConstants.groqModelFull : AppConstants.groqModelFast,
+      model:
+          isDeepDive ? AppConstants.groqModelFull : AppConstants.groqModelFast,
       maxTokens: isDeepDive ? 400 : 120,
     );
     if (looksLikeFailure(out)) {
@@ -252,7 +284,8 @@ ${webContext.isEmpty ? 'No reliable web snippets found.' : webContext}
 
   static Future<Map<String, String>> translateBatch(
       List<String> texts, String targetLanguage) async {
-    final toTranslate = texts.where((t) => t.trim().isNotEmpty).toSet().toList();
+    final toTranslate =
+        texts.where((t) => t.trim().isNotEmpty).toSet().toList();
     if (toTranslate.isEmpty || targetLanguage == 'English') {
       return {for (final t in texts) t: t};
     }
@@ -303,7 +336,8 @@ STRINGS: ${jsonEncode(missing)}
     return results;
   }
 
-  static Future<String?> translateText(String text, String targetLanguage) async {
+  static Future<String?> translateText(
+      String text, String targetLanguage) async {
     if (text.trim().isEmpty || targetLanguage == 'English') return text;
     final key = _cacheKey('translate_$targetLanguage', text);
     final c = _cache[key];
@@ -326,7 +360,8 @@ TEXT: $text
       }
       final cleaned = raw
           .replaceAll(
-              RegExp(r'^["\u2018\u2019\u201C\u201D]|["\u2018\u2019\u201C\u201D]$'),
+              RegExp(
+                  r'^["\u2018\u2019\u201C\u201D]|["\u2018\u2019\u201C\u201D]$'),
               '')
           .trim();
       _cache[key] = cleaned;
@@ -357,14 +392,16 @@ TEXT: $text
       var retries = 0;
       while (retries <= AppConstants.llmMaxHttpRetries) {
         try {
-          final response = await http.post(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ${AppConstants.groqApiKey}',
-            },
-            body: body,
-          ).timeout(const Duration(seconds: 25));
+          final response = await http
+              .post(
+                uri,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ${AppConstants.groqApiKey}',
+                },
+                body: body,
+              )
+              .timeout(const Duration(seconds: 25));
 
           if (response.statusCode == 200) {
             final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -385,7 +422,8 @@ TEXT: $text
               completer.complete('_Groq API rate limit exceeded._');
               break;
             }
-            await Future.delayed(Duration(seconds: 2 * (1 << retries.clamp(0, 4))));
+            await Future.delayed(
+                Duration(seconds: 2 * (1 << retries.clamp(0, 4))));
             continue;
           }
           completer.complete('_Groq API error ${response.statusCode}._');
